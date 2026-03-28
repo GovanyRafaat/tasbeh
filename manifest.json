@@ -1,0 +1,17 @@
+{
+  "name": "New Song",
+  "short_name": "New Song",
+  "description": "Hymns and Bible presentation app",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#1b3c59",
+  "theme_color": "#1b3c59",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "logo.ico",
+      "type": "image/x-icon",
+      "sizes": "16x16 32x32 48x48 64x64 128x128 256x256"
+    }
+  ]
+}
