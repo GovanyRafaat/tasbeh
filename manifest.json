@@ -1,6 +1,6 @@
 {
-  "name": "New Song",
-  "short_name": "New Song",
+  "name": "Tarneem",
+  "short_name": "Tarneem",
   "description": "Hymns and Bible presentation app",
   "start_url": "./index.html",
   "display": "standalone",
