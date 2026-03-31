@@ -122,7 +122,7 @@ function setupExternalWindow() {
     <html lang="ar" dir="rtl">
     <head>
       <meta charset="UTF-8">
-      <title>New Song - External Screen</title>
+      <title>Tarneem - External Screen</title>
       <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: black; }
         #bgMedia { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
