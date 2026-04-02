@@ -780,12 +780,28 @@ function openPresentation(song) {
 }
 
 function closePresentation() {
+  console.log("إغلاق العرض ومسح البحث...");
   presentationEl.classList.remove("active");
   currentSong = null;
   currentBibleItem = null;
   currentLines = [];
   activeIndex = 0;
   
+  // Clear search input and results when closing
+  const searchInput = document.getElementById("searchInput");
+  if (searchInput) {
+    searchInput.value = "";
+    // Clear the search field immediately and ensure UI reflects it
+    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+    
+    // تأكيد إضافي للمسح بعد وقت قصير جداً لضمان عدم وجود تداخل
+    setTimeout(() => {
+      searchInput.value = "";
+      const container = document.getElementById("songsContainer");
+      if (container) container.innerHTML = "";
+    }, 10);
+  }
+
   updatePresentationFormatting();
 }
 
@@ -935,6 +951,7 @@ window.addEventListener("keydown", function (e) {
       nextLine();
     }
   } else if (e.key === "Escape") {
+    e.preventDefault(); // منع أي سلوك افتراضي قد يتداخل مع المسح
     closePresentation();
   }
 });
