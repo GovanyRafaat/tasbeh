@@ -1,10 +1,11 @@
-const CACHE_NAME = 'new-song-cache-v1';
+const CACHE_NAME = 'new-song-cache-v2';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './style.css',
   './script.js',
   './tasbe7naDB.json',
+  './songs.json',
   './bible.json',
   './manifest.json',
   './logo.ico'

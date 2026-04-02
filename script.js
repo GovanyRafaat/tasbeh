@@ -1,5 +1,7 @@
+let tasbe7na = [];
 let songs = [];
 let bible = [];
+let allHymns = []; // قائمة موحدة لكل الترانيم
 let currentFontColor = "#ffffff";
 let currentShadow = false;
 
@@ -30,17 +32,62 @@ window.addEventListener('beforeinstallprompt', (e) => {
 
 async function loadData() {
   try {
-    const responseSongs = await fetch("tasbe7naDB.json");
-    songs = await responseSongs.json();
-    songs = songs.map(s => prepareSearchFields(s));
+    // 1. تحميل tasbe7naDB.json
+    try {
+      const responseTasbe7na = await fetch("tasbe7naDB.json");
+      if (responseTasbe7na.ok) {
+        tasbe7na = await responseTasbe7na.json();
+        console.log(`تم تحميل ${tasbe7na.length} ترنيمة من tasbe7naDB.json`);
+      } else {
+        console.error("فشل تحميل tasbe7naDB.json: ", responseTasbe7na.statusText);
+      }
+    } catch (e) {
+      console.error("خطأ في fetch tasbe7naDB.json: ", e);
+    }
+
+    // 2. تحميل songs.json
+    try {
+      const responseSongs = await fetch("songs.json");
+      if (responseSongs.ok) {
+        const songsData = await responseSongs.json();
+        // songs.json قد يكون مصفوفة مباشرة أو كائن يحتوي على "value"
+        if (Array.isArray(songsData)) {
+          songs = songsData;
+        } else if (songsData && Array.isArray(songsData.value)) {
+          songs = songsData.value;
+        } else {
+          console.warn("تنسيق غير متوقع لملف songs.json");
+        }
+        console.log(`تم تحميل ${songs.length} ترنيمة من songs.json`);
+      } else {
+        console.error("فشل تحميل songs.json: ", responseSongs.statusText);
+      }
+    } catch (e) {
+      console.error("خطأ في fetch songs.json: ", e);
+    }
+
+    // تجهيز ودمج البيانات
+    const preparedTasbe7na = (tasbe7na || []).map(s => prepareSearchFields(s));
+    const preparedSongs = (songs || []).map(s => prepareSearchFields(s));
     
-    const responseBible = await fetch("bible.json");
-    bible = await responseBible.json();
+    allHymns = [...preparedTasbe7na, ...preparedSongs];
+    console.log(`إجمالي الترانيم الجاهزة للبحث: ${allHymns.length}`);
+    
+    // 3. تحميل bible.json
+    try {
+      const responseBible = await fetch("bible.json");
+      if (responseBible.ok) {
+        bible = await responseBible.json();
+        console.log("تم تحميل الكتاب المقدس بنجاح");
+      }
+    } catch (e) {
+      console.error("خطأ في تحميل bible.json: ", e);
+    }
     
     displayResults([]);
     updateBgControls();
   } catch (error) {
-    console.log("فشل تحميل البيانات", error);
+    console.log("فشل تحميل البيانات بشكل عام", error);
   }
 }
 
@@ -211,20 +258,35 @@ document.getElementById("searchInput").addEventListener("input", function () {
   }
 
   let q = normalizeArabic(value);
-  let expandedQ = expandAbbreviations(q);
   
-  // 1. بحث في الترانيم
-  const hymnMatches = songs
-    .map(song => {
-      const index = song._searchText.indexOf(expandedQ);
-      if (index !== -1) {
-        return { ...song, _matchIndex: index };
+  // 1. بحث في الترانيم (بدون توسيع الاختصارات)
+  const hymnMatchesMap = new Map();
+  
+  allHymns.forEach(song => {
+    const index = song._searchText.indexOf(q);
+    if (index !== -1) {
+      // استخدام العنوان مع أول 50 حرف من النص لتمييز الترانيم المختلفة التي لها نفس الاسم
+      const contentSample = song._searchText.substring(0, 50);
+      const uniqueKey = `${song._searchTitle}_${contentSample}`;
+      
+      if (!hymnMatchesMap.has(uniqueKey)) {
+        hymnMatchesMap.set(uniqueKey, { ...song, _matchIndex: index });
       }
-      return null;
-    })
-    .filter(Boolean);
+    }
+  });
 
-  // 2. بحث في الكتاب المقدس (كتب وأصحاحات)
+  const hymnMatches = Array.from(hymnMatchesMap.values())
+    // ترتيب النتائج: الأولوية للي بيبدأ بكلمة البحث في العنوان
+    .sort((a, b) => {
+      const aStarts = a._searchTitle.startsWith(q);
+      const bStarts = b._searchTitle.startsWith(q);
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+      return 0;
+    });
+
+  // 2. بحث في الكتاب المقدس (مع توسيع الاختصارات)
+  let expandedQ = expandAbbreviations(q);
   const bibleMatches = [];
   const bibleQueryTokens = expandedQ.split(" ").filter(Boolean);
   
@@ -554,7 +616,7 @@ function expandAbbreviations(q) {
 }
 
 function prepareSearchFields(song) {
-  const title = song.title || song.name || "";
+  const title = (song.title || song.name || "").trim();
   let text = title + " ";
   const chorus = Array.isArray(song.chorus) ? song.chorus : [];
   const verses = Array.isArray(song.verses) ? song.verses : [];
@@ -568,6 +630,7 @@ function prepareSearchFields(song) {
   });
   return {
     ...song,
+    title: title, // ضمان أن العنوان نظيف وبدون مسافات زائدة
     _searchTitle: normalizeArabic(title),
     _searchText: normalizeArabic(text)
   };
@@ -643,23 +706,38 @@ function openPresentation(song) {
   // Helper to add a section (verse or chorus)
   function addSection(section) {
     if (!section) return;
-    let text = "";
+    let lines = [];
     if (Array.isArray(section)) {
-      text = section.join(" ");
-    } else {
-      text = section;
+      // If it's an array of lines, process each line separately
+      section.forEach(line => {
+        if (typeof line === "string") {
+          line.split(/\r?\n/).forEach(l => {
+            const trimmed = l.trim();
+            if (trimmed) lines.push(trimmed);
+          });
+        }
+      });
+    } else if (typeof section === "string") {
+      section.split(/\r?\n/).forEach(l => {
+        const trimmed = l.trim();
+        if (trimmed) lines.push(trimmed);
+      });
     }
 
-    if (!text.trim()) return;
+    if (lines.length === 0) return;
 
     if (viewMode === "slides") {
       // Slides mode: One bracket (section) = One slide
-      // Apply 6-word per line formatting
-      slides.push(formatSixWordsPerLine(text));
+      // Join all lines in this section and apply 6-word per line formatting
+      const fullText = lines.join(" ");
+      slides.push(formatSixWordsPerLine(fullText));
     } else {
       // Single Line mode: Exactly 4 words per slide
-      const chunks = splitToFourWords(text);
-      chunks.forEach(c => slides.push(c));
+      // But split must happen only inside the same line (no mixing lines)
+      lines.forEach(line => {
+        const chunks = splitToFourWords(line);
+        chunks.forEach(c => slides.push(c));
+      });
     }
   }
 
