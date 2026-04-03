@@ -170,17 +170,26 @@ function setupExternalWindow() {
     <head>
       <meta charset="UTF-8">
       <title>Tarneem - External Screen</title>
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+      <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
       <style>
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: black; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: black; font-family: 'Cairo', sans-serif; }
         #bgMedia { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
         #bgVideo { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; display: none; }
         #content { 
-          width: 100%; height: 100%; display: grid; place-items: center; text-align: center; 
-          color: white; font-family: Arial; font-weight: bold; 
+          width: 100%; height: 92%; display: grid; place-items: center; text-align: center; 
+          color: white; font-family: 'Cairo', sans-serif; font-weight: 900; 
           text-shadow: 2px 2px 5px rgba(0,0,0,0.8);
           z-index: 2; position: relative;
         }
-        .line-display { font-size: 12vh; white-space: pre-wrap; max-width: 90vw; }
+        .line-display { font-size: 10vh; white-space: pre-wrap; max-width: 90vw; line-height: 1.4; }
+        #footer {
+          position: absolute; bottom: 0; left: 0; width: 100%; height: 8vh;
+          display: flex; justify-content: space-between; align-items: center;
+          padding: 0 2vw; box-sizing: border-box; color: rgba(255, 255, 255, 0.5);
+          font-size: 18px; z-index: 3;
+        }
       </style>
     </head>
     <body>
@@ -188,6 +197,10 @@ function setupExternalWindow() {
       <video id="bgVideo" loop muted playsinline></video>
       <div id="content">
         <div id="lineDisplay" class="line-display"></div>
+      </div>
+      <div id="footer">
+        <div id="slideCounterExt"></div>
+        <div></div> <!-- لضبط المسافة لو مفيش أيقونة -->
       </div>
     </body>
     </html>
@@ -670,9 +683,8 @@ function openBiblePresentation(bibleItem) {
   activeIndex = 0;
 
   presentationTitle.textContent = `${bibleItem.bookName} ${bibleItem.chapterNumber}`;
-  lineDisplay.textContent = currentLines[activeIndex] || "";
   presentationEl.classList.add("active");
-  updatePresentationFormatting();
+  setActive(activeIndex);
 }
 
 function openPresentation(song) {
@@ -774,9 +786,8 @@ function openPresentation(song) {
   }
 
   presentationTitle.textContent = song.title || song.name || "";
-  lineDisplay.textContent = currentLines[activeIndex] || "";
   presentationEl.classList.add("active");
-  updatePresentationFormatting();
+  setActive(activeIndex);
 }
 
 function closePresentation() {
@@ -808,6 +819,16 @@ function closePresentation() {
 function setActive(idx) {
   activeIndex = Math.max(0, Math.min(currentLines.length - 1, idx));
   lineDisplay.textContent = currentLines[activeIndex] || "";
+  
+  // تحديث عداد الشرايح
+  const counterEl = document.getElementById("slideCounter");
+  if (counterEl && currentLines.length > 0) {
+    // التنسيق كما في الصورة: إجمالي / الحالي (مثال: 8 / 1)
+    counterEl.textContent = `${currentLines.length} / ${activeIndex + 1}`;
+  } else if (counterEl) {
+    counterEl.textContent = "";
+  }
+
   updatePresentationFormatting();
 }
 
@@ -862,11 +883,13 @@ function updatePresentationFormatting() {
 
     // نوع العرض (تعديل الحجم والمسافات)
     if (viewMode === "single") {
-      lineDisplay.style.fontSize = "15vh";
+      lineDisplay.style.fontSize = "10vh"; // توحيد الحجم مع وضع الشرايح
       lineDisplay.style.whiteSpace = "pre-wrap"; 
+      lineDisplay.style.lineHeight = "1.4"; // توحيد تباعد الأسطر
     } else {
-      lineDisplay.style.fontSize = "12vh";
+      lineDisplay.style.fontSize = "10vh";
       lineDisplay.style.whiteSpace = "pre-wrap";
+      lineDisplay.style.lineHeight = "1.4";
     }
   }
 
@@ -879,6 +902,7 @@ function updateExternalWindowContent() {
   
   const doc = externalWindow.document;
   const lineDisplayExt = doc.getElementById("lineDisplay");
+  const slideCounterExt = doc.getElementById("slideCounterExt");
   const bgMediaExt = doc.getElementById("bgMedia");
   const bgVideoExt = doc.getElementById("bgVideo");
   
@@ -892,6 +916,11 @@ function updateExternalWindowContent() {
     lineDisplayExt.style.textShadow = lineDisplay.style.textShadow;
     lineDisplayExt.style.fontSize = lineDisplay.style.fontSize;
     lineDisplayExt.style.whiteSpace = lineDisplay.style.whiteSpace;
+    
+    // تحديث العداد في الشاشة الخارجية
+    if (slideCounterExt) {
+      slideCounterExt.textContent = document.getElementById("slideCounter").textContent;
+    }
     
     // تطبيق الخلفية الحالية من المين
     const bgSelect = document.getElementById("bgColor").value;
@@ -919,6 +948,7 @@ function updateExternalWindowContent() {
   } else {
     // العرض مقفول - رجع صورة الشاشة الخارجية المختارة
     lineDisplayExt.textContent = "";
+    if (slideCounterExt) slideCounterExt.textContent = "";
     bgMediaExt.src = externalScreenImageUrl || "";
     bgMediaExt.style.display = externalScreenImageUrl ? "block" : "none";
     bgVideoExt.style.display = "none";
