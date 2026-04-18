@@ -219,19 +219,28 @@ function updateExternalWindowContent() {
   
   const doc = externalWindow.document;
   const lineDisplayExt = doc.getElementById("lineDisplay");
+  const slideCounterExt = doc.getElementById("slideCounterExt");
   const bgMediaExt = doc.getElementById("bgMedia");
   const bgVideoExt = doc.getElementById("bgVideo");
   
+  // Ensure elements exist before proceeding
+  if (!lineDisplayExt || !bgMediaExt || !bgVideoExt) return;
+  
   if (presentationEl.classList.contains("active")) {
-    // عرض شغال
+    // عرض شغال - انشر محتوى المين للشاشة الخارجية
     lineDisplayExt.textContent = lineDisplay.textContent;
     lineDisplayExt.style.color = lineDisplay.style.color;
     lineDisplayExt.style.textShadow = lineDisplay.style.textShadow;
     lineDisplayExt.style.fontSize = lineDisplay.style.fontSize;
+    lineDisplayExt.style.whiteSpace = lineDisplay.style.whiteSpace;
+    
+    // تحديث العداد في الشاشة الخارجية
+    if (slideCounterExt) {
+      slideCounterExt.textContent = document.getElementById("slideCounter").textContent;
+    }
     
     // تطبيق الخلفية الحالية من المين
     const bgSelect = document.getElementById("bgColor").value;
-    const mainBg = presentationEl.style.backgroundColor;
     
     bgMediaExt.style.display = "none";
     bgVideoExt.style.display = "none";
@@ -246,14 +255,19 @@ function updateExternalWindowContent() {
       bgVideoExt.style.display = "block";
       bgVideoExt.play().catch(e => console.log("External autoplay blocked:", e));
       doc.body.style.backgroundColor = "transparent";
+    } else if (bgSelect === "white") {
+      doc.body.style.backgroundColor = "#ffffff";
+    } else if (bgSelect === "green") {
+      doc.body.style.backgroundColor = "#00ff00";
     } else {
-      doc.body.style.backgroundColor = mainBg || "black";
+      doc.body.style.backgroundColor = "#000000";
     }
   } else {
-    // العرض مقفول - رجع صورة الشاشة الخارجية
+    // العرض مقفول - رجع صورة الشاشة الخارجية المختارة
     lineDisplayExt.textContent = "";
-    bgMediaExt.src = externalScreenImageUrl;
-    bgMediaExt.style.display = "block";
+    if (slideCounterExt) slideCounterExt.textContent = "";
+    bgMediaExt.src = externalScreenImageUrl || "";
+    bgMediaExt.style.display = externalScreenImageUrl ? "block" : "none";
     bgVideoExt.style.display = "none";
     bgVideoExt.pause();
     doc.body.style.backgroundColor = "black";
@@ -512,7 +526,7 @@ const preview = document.getElementById("colorPreview");
 
 if (fontColorInput && preview) {
 
-  // ✅ خلي اللون الافتراضي أبيض
+  // خلي اللون الافتراضي أبيض
   currentFontColor = "#ffffff";
   fontColorInput.value = "#ffffff";
   preview.style.background = "#ffffff";
@@ -572,7 +586,7 @@ function getSongLines(song) {
 
 function normalizeArabic(str) {
   return str
-    .replace(/[ًٌٍَُِّْـ]/g, "")
+    .replace(/[ًٌٍَُِّْـ]/g, "")
     .replace(/[آأإا]/g, "ا")
     .replace(/ى/g, "ي")
     .replace(/[^\p{L}\p{N}\s]/gu, "")
@@ -643,17 +657,17 @@ function prepareSearchFields(song) {
   });
   return {
     ...song,
-    title: title, // ضمان أن العنوان نظيف وبدون مسافات زائدة
+    title: title,
     _searchTitle: normalizeArabic(title),
     _searchText: normalizeArabic(text)
   };
 }
+
 function openBiblePresentation(bibleItem) {
   currentBibleItem = bibleItem;
-  currentSong = null; // حتى لا تتعارض مع الترانيم
+  currentSong = null;
   const slides = [];
 
-  // دالة مساعدة لتقسيم النص لـ 4 كلمات
   function splitToFourWords(text) {
     if (!text) return [];
     const cleanText = text.replace(/\s+/g, " ").trim();
@@ -665,13 +679,11 @@ function openBiblePresentation(bibleItem) {
     return result;
   }
 
-  // إذا كان نوع العرض "شرائح"، تظهر كل آية في شريحة مستقلة
   if (viewMode === "slides") {
     bibleItem.verses.forEach(v => {
       slides.push(`(${v.number}) ${v.text}`);
     });
   } else {
-    // وضع "سطر واحد" = 4 كلمات لكل شريحة
     bibleItem.verses.forEach(v => {
       const verseText = `(${v.number}) ${v.text}`;
       const chunks = splitToFourWords(verseText);
@@ -685,14 +697,15 @@ function openBiblePresentation(bibleItem) {
   presentationTitle.textContent = `${bibleItem.bookName} ${bibleItem.chapterNumber}`;
   presentationEl.classList.add("active");
   setActive(activeIndex);
+
+  _saveToHistory(bibleItem);
 }
 
 function openPresentation(song) {
   currentSong = song;
-  currentBibleItem = null; // حتى لا تتعارض مع الكتاب المقدس
+  currentBibleItem = null;
   const slides = [];
 
-  // Helper to split text into EXACTLY 4 words per chunk
   function splitToFourWords(text) {
     if (!text) return [];
     const cleanText = text.replace(/\s+/g, " ").trim();
@@ -704,7 +717,6 @@ function openPresentation(song) {
     return result;
   }
 
-  // Helper to format text with 6 words per line
   function formatSixWordsPerLine(text) {
     if (!text) return "";
     const words = text.trim().split(/\s+/).filter(Boolean);
@@ -715,12 +727,10 @@ function openPresentation(song) {
     return lines.join("\n");
   }
 
-  // Helper to add a section (verse or chorus)
   function addSection(section) {
     if (!section) return;
     let lines = [];
     if (Array.isArray(section)) {
-      // If it's an array of lines, process each line separately
       section.forEach(line => {
         if (typeof line === "string") {
           line.split(/\r?\n/).forEach(l => {
@@ -739,13 +749,9 @@ function openPresentation(song) {
     if (lines.length === 0) return;
 
     if (viewMode === "slides") {
-      // Slides mode: One bracket (section) = One slide
-      // Join all lines in this section and apply 6-word per line formatting
       const fullText = lines.join(" ");
       slides.push(formatSixWordsPerLine(fullText));
     } else {
-      // Single Line mode: Exactly 4 words per slide
-      // But split must happen only inside the same line (no mixing lines)
       lines.forEach(line => {
         const chunks = splitToFourWords(line);
         chunks.forEach(c => slides.push(c));
@@ -756,7 +762,6 @@ function openPresentation(song) {
   const chorus = Array.isArray(song.chorus) ? song.chorus : [];
   const verses = Array.isArray(song.verses) ? song.verses : [];
 
-  // Presentation order
   if (song.chorusFirst && chorus.length) {
     chorus.forEach(c => addSection(c));
   }
@@ -775,7 +780,6 @@ function openPresentation(song) {
   currentLines = slides;
   activeIndex = 0;
 
-  // Search matching to start at the right slide
   const searchInput = document.getElementById("searchInput");
   if (searchInput && searchInput.value.trim()) {
     const q = normalizeArabic(searchInput.value.trim());
@@ -788,6 +792,8 @@ function openPresentation(song) {
   presentationTitle.textContent = song.title || song.name || "";
   presentationEl.classList.add("active");
   setActive(activeIndex);
+
+  _saveToHistory(song);
 }
 
 function closePresentation() {
@@ -798,14 +804,10 @@ function closePresentation() {
   currentLines = [];
   activeIndex = 0;
   
-  // Clear search input and results when closing
   const searchInput = document.getElementById("searchInput");
   if (searchInput) {
     searchInput.value = "";
-    // Clear the search field immediately and ensure UI reflects it
     searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-    
-    // تأكيد إضافي للمسح بعد وقت قصير جداً لضمان عدم وجود تداخل
     setTimeout(() => {
       searchInput.value = "";
       const container = document.getElementById("songsContainer");
@@ -820,16 +822,18 @@ function setActive(idx) {
   activeIndex = Math.max(0, Math.min(currentLines.length - 1, idx));
   lineDisplay.textContent = currentLines[activeIndex] || "";
   
-  // تحديث عداد الشرايح
   const counterEl = document.getElementById("slideCounter");
   if (counterEl && currentLines.length > 0) {
-    // التنسيق كما في الصورة: إجمالي / الحالي (مثال: 8 / 1)
     counterEl.textContent = `${currentLines.length} / ${activeIndex + 1}`;
   } else if (counterEl) {
     counterEl.textContent = "";
   }
 
   updatePresentationFormatting();
+
+  if (!currentSong && !currentBibleItem && _customAlign) {
+    lineDisplay.style.textAlign = _customAlign;
+  }
 }
 
 function nextLine() {
@@ -846,16 +850,13 @@ function updatePresentationFormatting() {
   const isActive = presentationEl.classList.contains("active");
   const bgSelect = document.getElementById("bgColor").value;
 
-  // Show/Hide Cancel button based on background type (always check)
   if (bgSelect === "image" || bgSelect === "video") {
     cancelBgBtn.style.display = "block";
   } else {
     cancelBgBtn.style.display = "none";
   }
 
-  // Only update the main presentation overlay if it's active
   if (isActive) {
-    // Reset media visibility
     presentationImage.style.display = "none";
     presentationVideo.style.display = "none";
     presentationVideo.pause();
@@ -875,17 +876,13 @@ function updatePresentationFormatting() {
       presentationEl.style.backgroundColor = "transparent";
     }
 
-    // لون الخط
     lineDisplay.style.color = currentFontColor;
-
-    // ظل النص
     lineDisplay.style.textShadow = currentShadow ? "2px 2px 5px rgba(0,0,0,0.8)" : "none";
 
-    // نوع العرض (تعديل الحجم والمسافات)
     if (viewMode === "single") {
-      lineDisplay.style.fontSize = "10vh"; // توحيد الحجم مع وضع الشرايح
+      lineDisplay.style.fontSize = "10vh";
       lineDisplay.style.whiteSpace = "pre-wrap"; 
-      lineDisplay.style.lineHeight = "1.4"; // توحيد تباعد الأسطر
+      lineDisplay.style.lineHeight = "1.4";
     } else {
       lineDisplay.style.fontSize = "10vh";
       lineDisplay.style.whiteSpace = "pre-wrap";
@@ -893,68 +890,7 @@ function updatePresentationFormatting() {
     }
   }
 
-  // Always update the external window if it exists
   updateExternalWindowContent();
-}
-
-function updateExternalWindowContent() {
-  if (!externalWindow || externalWindow.closed) return;
-  
-  const doc = externalWindow.document;
-  const lineDisplayExt = doc.getElementById("lineDisplay");
-  const slideCounterExt = doc.getElementById("slideCounterExt");
-  const bgMediaExt = doc.getElementById("bgMedia");
-  const bgVideoExt = doc.getElementById("bgVideo");
-  
-  // Ensure elements exist before proceeding
-  if (!lineDisplayExt || !bgMediaExt || !bgVideoExt) return;
-  
-  if (presentationEl.classList.contains("active")) {
-    // عرض شغال - انشر محتوى المين للشاشة الخارجية
-    lineDisplayExt.textContent = lineDisplay.textContent;
-    lineDisplayExt.style.color = lineDisplay.style.color;
-    lineDisplayExt.style.textShadow = lineDisplay.style.textShadow;
-    lineDisplayExt.style.fontSize = lineDisplay.style.fontSize;
-    lineDisplayExt.style.whiteSpace = lineDisplay.style.whiteSpace;
-    
-    // تحديث العداد في الشاشة الخارجية
-    if (slideCounterExt) {
-      slideCounterExt.textContent = document.getElementById("slideCounter").textContent;
-    }
-    
-    // تطبيق الخلفية الحالية من المين
-    const bgSelect = document.getElementById("bgColor").value;
-    
-    bgMediaExt.style.display = "none";
-    bgVideoExt.style.display = "none";
-    bgVideoExt.pause();
-
-    if (bgSelect === "image" && customImageUrl) {
-      bgMediaExt.src = customImageUrl;
-      bgMediaExt.style.display = "block";
-      doc.body.style.backgroundColor = "transparent";
-    } else if (bgSelect === "video" && customVideoUrl) {
-      bgVideoExt.src = customVideoUrl;
-      bgVideoExt.style.display = "block";
-      bgVideoExt.play().catch(e => console.log("External autoplay blocked:", e));
-      doc.body.style.backgroundColor = "transparent";
-    } else if (bgSelect === "white") {
-      doc.body.style.backgroundColor = "#ffffff";
-    } else if (bgSelect === "green") {
-      doc.body.style.backgroundColor = "#00ff00";
-    } else {
-      doc.body.style.backgroundColor = "#000000";
-    }
-  } else {
-    // العرض مقفول - رجع صورة الشاشة الخارجية المختارة
-    lineDisplayExt.textContent = "";
-    if (slideCounterExt) slideCounterExt.textContent = "";
-    bgMediaExt.src = externalScreenImageUrl || "";
-    bgMediaExt.style.display = externalScreenImageUrl ? "block" : "none";
-    bgVideoExt.style.display = "none";
-    bgVideoExt.pause();
-    doc.body.style.backgroundColor = "black";
-  }
 }
 
 window.addEventListener("keydown", function (e) {
@@ -974,14 +910,255 @@ window.addEventListener("keydown", function (e) {
       const n = parseInt(numberBuffer, 10);
       numberBuffer = "";
       if (!isNaN(n)) {
-        // 1-based slide numbering
         setActive(n - 1);
       }
     } else {
       nextLine();
     }
   } else if (e.key === "Escape") {
-    e.preventDefault(); // منع أي سلوك افتراضي قد يتداخل مع المسح
+    e.preventDefault();
     closePresentation();
   }
 });
+
+/* ================================================================
+   قائمة المحفوظات
+   ================================================================ */
+
+let _historyList = [];
+try { _historyList = JSON.parse(localStorage.getItem("tarneemHistory") || "[]"); } catch(e) { _historyList = []; }
+
+function _saveToHistory(item) {
+  const key = item.isBible
+    ? "bible_" + item.bookName + "_" + item.chapterNumber
+    : "hymn_" + (item.title || item.name || "");
+
+  _historyList = _historyList.filter(h => h._historyKey !== key);
+  _historyList.unshift(Object.assign({}, item, { _historyKey: key, _historyTime: Date.now() }));
+  if (_historyList.length > 50) _historyList = _historyList.slice(0, 50);
+
+  try { localStorage.setItem("tarneemHistory", JSON.stringify(_historyList)); } catch(e) {}
+  _renderHistoryList();
+}
+
+function _removeFromHistory(key) {
+  _historyList = _historyList.filter(h => h._historyKey !== key);
+  try { localStorage.setItem("tarneemHistory", JSON.stringify(_historyList)); } catch(e) {}
+  _renderHistoryList();
+}
+
+function _clearHistory() {
+  _historyList = [];
+  try { localStorage.setItem("tarneemHistory", "[]"); } catch(e) {}
+  _renderHistoryList();
+}
+
+function _openCustomTextFromHistory(item) {
+  currentSong = null;
+  currentBibleItem = null;
+  currentLines = [item._customText];
+  activeIndex = 0;
+  _customAlign = item._customAlign || "center";
+  presentationTitle.textContent = "نص مخصص";
+  presentationEl.classList.add("active");
+  setActive(0);
+  lineDisplay.style.textAlign = _customAlign;
+}
+
+function _renderHistoryList() {
+  const c = document.getElementById("_historyContainer");
+  if (!c) return;
+  c.innerHTML = "";
+  if (_historyList.length === 0) {
+    c.innerHTML = '<div style="color:#888;padding:10px;text-align:center;font-size:13px;">لا يوجد محفوظات بعد</div>';
+    return;
+  }
+  _historyList.forEach(function(item) {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;align-items:center;border-bottom:1px solid #f0f0f0;";
+
+    const label = document.createElement("div");
+    label.className = "song";
+    label.style.cssText = "color:#000;text-shadow:none;flex:1;border-bottom:none;margin:0;cursor:pointer;";
+
+    if (item._isCustomText) {
+      const preview = item._customText.length > 40
+        ? item._customText.substring(0, 40) + "..."
+        : item._customText;
+      label.textContent = "نص: " + preview;
+      label.addEventListener("click", function() { _openCustomTextFromHistory(item); });
+    } else if (item.isBible) {
+      label.textContent = item.bookName + " " + item.chapterNumber;
+      label.addEventListener("click", function() { openBiblePresentation(item); });
+    } else {
+      label.textContent = item.title || item.name || "ترنيمة";
+      label.addEventListener("click", function() { openPresentation(item); });
+    }
+
+    const delBtn = document.createElement("button");
+    delBtn.textContent = "×";
+    delBtn.title = "حذف";
+    delBtn.style.cssText = "background:none;border:none;color:#bbb;font-size:20px;cursor:pointer;padding:0 10px;line-height:1;flex-shrink:0;font-weight:bold;";
+    delBtn.addEventListener("mouseover", function() { this.style.color = "#e74c3c"; });
+    delBtn.addEventListener("mouseout",  function() { this.style.color = "#bbb"; });
+    delBtn.addEventListener("click", function(e) {
+      e.stopPropagation();
+      _removeFromHistory(item._historyKey);
+    });
+
+    row.appendChild(label);
+    row.appendChild(delBtn);
+    c.appendChild(row);
+  });
+}
+
+/* ================================================================
+   النص المخصص
+   ================================================================ */
+
+var _customAlign = "center";
+
+function _openCustomModal() {
+  document.getElementById("_customModal").style.display = "flex";
+  document.getElementById("_customTextArea").focus();
+}
+
+function _closeCustomModal() {
+  document.getElementById("_customModal").style.display = "none";
+}
+
+function _setAlign(val) {
+  _customAlign = val;
+  ["_btnRight", "_btnCenter", "_btnLeft"].forEach(function(id) {
+    document.getElementById(id).style.background = "#fff";
+    document.getElementById(id).style.color = "#1b3c59";
+  });
+  const map = { right: "_btnRight", center: "_btnCenter", left: "_btnLeft" };
+  document.getElementById(map[val]).style.background = "#1b3c59";
+  document.getElementById(map[val]).style.color = "#fff";
+}
+
+function _saveCustomText() {
+  const text = document.getElementById("_customTextArea").value;
+  if (!text.trim()) return;
+
+  const ts = Date.now();
+  const customItem = {
+    _isCustomText: true,
+    _customText: text.trim(),
+    _customAlign: _customAlign,
+    _historyTime: ts,
+    _historyKey: "custom_" + ts
+  };
+
+  _historyList.unshift(customItem);
+  if (_historyList.length > 50) _historyList = _historyList.slice(0, 50);
+  try { localStorage.setItem("tarneemHistory", JSON.stringify(_historyList)); } catch(e) {}
+  _renderHistoryList();
+
+  document.getElementById("_customTextArea").value = "";
+  _closeCustomModal();
+}
+
+/* ================================================================
+   حقن عناصر HTML للإضافات تلقائياً
+   ================================================================ */
+
+(function _injectAdditionsHTML() {
+
+  const style = document.createElement("style");
+  style.textContent = `
+    ._hbox { margin: 12px 16px 80px; border: 1px solid #ddd; border-radius: 10px; overflow: hidden; }
+    ._hhdr {
+      background: #1b3c59; color: #fff; padding: 10px 14px;
+      font-family: 'Cairo', sans-serif; font-size: 15px; font-weight: 700;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    ._hhdr button {
+      background: none; border: none; color: rgba(255,255,255,0.6);
+      font-size: 22px; cursor: pointer; padding: 0; line-height: 1; font-weight: bold;
+    }
+    ._hhdr button:hover { color: #fff; }
+    #_historyContainer { max-height: 300px; overflow-y: auto; }
+    #_fabBtn {
+      position: fixed; bottom: 28px; left: 28px; width: 52px; height: 52px;
+      border-radius: 50%; background: #1b3c59; color: #fff; font-size: 32px;
+      border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,.35);
+      z-index: 999; display: flex; align-items: center; justify-content: center;
+      font-family: 'Cairo', sans-serif; line-height: 1;
+    }
+    #_fabBtn:hover { background: #27527a; }
+    #_customModal {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.55); z-index: 1100;
+      align-items: center; justify-content: center;
+    }
+    ._mbox {
+      background: #fff; border-radius: 14px; padding: 22px 18px 18px;
+      width: min(92vw, 420px); display: flex; flex-direction: column; gap: 12px;
+      font-family: 'Cairo', sans-serif;
+    }
+    ._mbox h3 { margin: 0; font-size: 17px; color: #1b3c59; text-align: center; }
+    #_customTextArea {
+      width: 100%; min-height: 130px; border: 1.5px solid #ccc; border-radius: 8px;
+      padding: 10px; font-family: 'Cairo', sans-serif; font-size: 15px;
+      resize: vertical; box-sizing: border-box; direction: rtl;
+    }
+    ._arow { display: flex; gap: 8px; align-items: center; }
+    ._arow span { font-size: 13px; color: #555; }
+    ._ab {
+      border: 1.5px solid #1b3c59; border-radius: 6px; padding: 5px 14px;
+      cursor: pointer; font-family: 'Cairo', sans-serif; font-size: 13px;
+      background: #fff; color: #1b3c59;
+    }
+    ._mac { display: flex; gap: 10px; justify-content: flex-end; }
+    ._mac button { font-family: 'Cairo', sans-serif; font-size: 14px; padding: 8px 22px; border-radius: 8px; border: none; cursor: pointer; }
+    ._bsave { background: #1b3c59; color: #fff; }
+    ._bcanc { background: #eee; color: #333; }
+  `;
+  document.head.appendChild(style);
+
+  // قسم المحفوظات
+  const hbox = document.createElement("div");
+  hbox.className = "_hbox";
+  hbox.innerHTML = `
+    <div class="_hhdr">
+      <span>المحفوظات</span>
+      <button onclick="_clearHistory()" title="مسح الكل">×</button>
+    </div>
+    <div id="_historyContainer"></div>
+  `;
+  const mainEl = document.querySelector("main");
+  if (mainEl) mainEl.appendChild(hbox);
+
+  // زر +
+  const fab = document.createElement("button");
+  fab.id = "_fabBtn";
+  fab.textContent = "+";
+  fab.title = "إضافة نص مخصص";
+  fab.addEventListener("click", _openCustomModal);
+  document.body.appendChild(fab);
+
+  // المودال
+  const modal = document.createElement("div");
+  modal.id = "_customModal";
+  modal.innerHTML = `
+    <div class="_mbox">
+      <h3>إضافة نص مخصص</h3>
+      <textarea id="_customTextArea" placeholder="اكتب النص هنا..."></textarea>
+      <div class="_arow">
+        <span>محاذاة:</span>
+        <button id="_btnRight"  class="_ab" onclick="_setAlign('right')">يمين</button>
+        <button id="_btnCenter" class="_ab" onclick="_setAlign('center')" style="background:#1b3c59;color:#fff;">وسط</button>
+        <button id="_btnLeft"   class="_ab" onclick="_setAlign('left')">شمال</button>
+      </div>
+      <div class="_mac">
+        <button class="_bcanc" onclick="_closeCustomModal()">إلغاء</button>
+        <button class="_bsave" onclick="_saveCustomText()">حفظ</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  _renderHistoryList();
+})();
